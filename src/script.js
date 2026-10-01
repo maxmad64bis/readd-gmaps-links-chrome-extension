@@ -310,20 +310,24 @@ function injectSmallMapThumbnails() {
         return;
     }
     smallMapThumbnailElement.forEach((elementSelector) => {
-        const targettedElement = document.querySelector(elementSelector);
+        const targetedElements = document.querySelectorAll(elementSelector);
 
-        // check if element exists on the page
-        if (targettedElement && targettedElement.parentNode && targettedElement.parentNode.tagName) {
-            if (targettedElement.parentNode.tagName.toLowerCase() === 'a') {
-                // if its already an a tag, just update its href attribute with the generated maps link
-                targettedElement.parentNode.href = mapsHref;
-            } else {
-                // otherwise create a new a tag with href attribute set to generated maps link, then wrap it around the element
-                const wrapperLink = document.createElement('a');
-                wrapperLink.href = mapsHref;
-                targettedElement.parentNode.insertBefore(wrapperLink, targettedElement);
-                targettedElement.parentNode.removeChild(targettedElement);
-                wrapperLink.appendChild(targettedElement);
+        for (let i = 0; i < targetedElements.length; i++) {
+            const targettedElement = targetedElements[i];
+
+            // check if element exists on the page
+            if (targettedElement && targettedElement.parentNode && targettedElement.parentNode.tagName) {
+                if (targettedElement.parentNode.tagName.toLowerCase() === 'a') {
+                    // if its already an a tag, just update its href attribute with the generated maps link
+                    targettedElement.parentNode.href = mapsHref;
+                } else {
+                    // otherwise create a new a tag with href attribute set to generated maps link, then wrap it around the element
+                    const wrapperLink = document.createElement('a');
+                    wrapperLink.href = mapsHref;
+                    targettedElement.parentNode.insertBefore(wrapperLink, targettedElement);
+                    targettedElement.parentNode.removeChild(targettedElement);
+                    wrapperLink.appendChild(targettedElement);
+                }
             }
         }
     });
@@ -400,6 +404,25 @@ function tabsRowNeedsWork() {
     }
     const mapsHref = buildMapsLink();
     const tabsContainer = document.querySelector(TABS_SELECTOR);
+    const overlaySelectors = [addressMapSelector, placesMapSelector, countryMapSelector];
+    // No query (e.g. /search without ?q=): nothing to inject or refresh,
+    // only removing our own stale UI still counts as work so the safety
+    // net can settle instead of looping.
+    if (!mapsHref) {
+        if (tabsContainer && tabsContainer.querySelector(`[${TAB_MARKER}]`)) {
+            return true;
+        }
+        if (document.querySelector(`[${ROUND_BUTTON_MARKER}]`)) {
+            return true;
+        }
+        for (let i = 0; i < overlaySelectors.length; i++) {
+            const container = document.querySelector(overlaySelectors[i]);
+            if (container && container.querySelector('.open-in-maps-extension-button')) {
+                return true;
+            }
+        }
+        return false;
+    }
     if (tabsContainer) {
         // Missing tab needs work; a coexisting native tab is a duplicate to resolve.
         if (!tabsContainer.querySelector(`[${TAB_MARKER}]`)) {
@@ -435,7 +458,6 @@ function tabsRowNeedsWork() {
     if (ownRound && mapsHref && ownRound.getAttribute('href') !== mapsHref) {
         return true;
     }
-    const overlaySelectors = [addressMapSelector, placesMapSelector, countryMapSelector];
     for (let i = 0; i < overlaySelectors.length; i++) {
         const container = document.querySelector(overlaySelectors[i]);
         if (!container) {
@@ -554,6 +576,9 @@ function resetForNavigation() {
             tryInjectAll();
         } catch (e) {
             // Never let a navigation reset die: the observer + safety net retry.
+            if (window.console && window.console.debug) {
+                window.console.debug('[readd-maps] navigation retry after error', e);
+            }
         }
         startTabsObserver();
         startSafetyNet();
